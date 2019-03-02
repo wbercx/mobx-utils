@@ -14,7 +14,15 @@ let memoizationId = 0
 export function createTransformer<A, B>(
     transformer: ITransformer<A, B>,
     onCleanup?: (resultObject: B | undefined, sourceObject?: A) => void
-): ITransformer<A, B> {
+): ITransformer<A, B>;
+export function createTransformer<A, B>(
+    transformer: ITransformer<A, B>,
+    options: {
+        onCleanup?: (resultObject: B | undefined, sourceObject?: A) => void
+        debugNameGenerator?: (sourceObject?: A) => string
+    }
+): ITransformer<A, B>;
+export function createTransformer<A, B>(transformer: ITransformer<A, B>, arg2: any): ITransformer<A, B> {
     invariant(
         typeof transformer === "function" && transformer.length < 2,
         "createTransformer expects a function that accepts one argument"
@@ -25,18 +33,23 @@ export function createTransformer<A, B>(
 
     function createView(sourceIdentifier: number, sourceObject: A) {
         let latestValue: B
+        const { onCleanup, debugNameGenerator } = typeof arg2 === 'object' ? arg2 : new Object();
+        const prettifiedName = debugNameGenerator ?
+            debugNameGenerator(sourceObject) :
+            `Transformer-${(<any>transformer).name}-${sourceIdentifier}`;
         const expr = computed(
             () => {
                 return (latestValue = transformer(sourceObject))
             },
             {
-                name: `Transformer-${(<any>transformer).name}-${sourceIdentifier}`
+                name: prettifiedName
             }
         )
         const disposer = onBecomeUnobserved(expr, () => {
             delete views[sourceIdentifier]
             disposer()
             if (onCleanup) onCleanup(latestValue, sourceObject)
+            if (typeof arg2 === 'function') arg2(latestValue, sourceObject)
         })
         return expr
     }
